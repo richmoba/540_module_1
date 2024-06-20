@@ -1,0 +1,12 @@
+numpy
+opencv-python
+scikit-learn
+tensorflow
+keras
+streamlit
+pydicom
+gdmc
+
+
+
+numpy opencv-python scikit-learn tensorflow keras streamlit pydicom
