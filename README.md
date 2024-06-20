@@ -1,6 +1,7 @@
 # 540_module_1
 540_module_1
 # Medical Image Classification Project
+Youtube video location https://youtu.be/Eb6bSmw19Gk
 
 ## Overview
 This project aims to classify mammography images to identify the presence of abnormalities such as masses and calcifications. The dataset used is the CBIS-DDSM, which must be manually downloaded from the CBIS-DDSM organization on TCIA.
