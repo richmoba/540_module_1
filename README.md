@@ -26,8 +26,9 @@ project/
 
 ## Setup Instructions
 1. Manually download the CBIS-DDSM dataset from the CBIS-DDSM organization on TCIA.
+2. https://www.cancerimagingarchive.net/collection/cbis-ddsm/
 Note: ensure that the CBIS-DDSM folder is not read only.
-2. Place the downloaded dataset in the `data/raw` directory. The directory structure should look similar to this:
+3. Place the downloaded dataset in the `data/raw` directory. The directory structure should look similar to this:
 data/raw/
 ├── CBIS-DDSM/
 ├── Calc-Test_P_00038_LEFT_MLO_1/
@@ -37,9 +38,9 @@ data/raw/
 ├── image2.jpg
 └── ...
 
-3. Install the required dependencies using `pip install -r requirements.txt`.
-4. Run the setup script: `python setup.py`.
-5. Start the Streamlit interface: `streamlit run main.py`.
+4. Install the required dependencies using `pip install -r requirements.txt`.
+5. Run the setup script: `python setup.py`.
+6. Start the Streamlit interface: `streamlit run main.py`.
 
 ## Running the Project
 The project includes a visual interface to upload and classify new images. The interface will display results from both the SVM and CNN models.
