@@ -11,3 +11,4 @@ gdcm
 streamlit
 numpy
 joblib
+requests
