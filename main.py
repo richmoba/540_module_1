@@ -29,9 +29,14 @@ temp_dir = tempfile.mkdtemp()
 # Download and load the processed data
 processed_data_path = os.path.join(temp_dir, 'processed_data.npz')
 download_file(processed_data_url, processed_data_path)
-data = np.load(processed_data_path, allow_pickle=True)
-X_test = data['X_test']
-y_test = data['y_test']
+
+try:
+    data = np.load(processed_data_path, allow_pickle=True)
+    X_test = data['X_test']
+    y_test = data['y_test']
+except Exception as e:
+    st.error(f"Error loading processed data: {e}")
+    st.stop()
 
 # Download and load the models
 cnn_model_path = os.path.join(temp_dir, 'cnn_model.h5')
@@ -39,8 +44,12 @@ svm_model_path = os.path.join(temp_dir, 'svm_model.pkl')
 download_file(cnn_model_url, cnn_model_path)
 download_file(svm_model_url, svm_model_path)
 
-cnn_model = tf.keras.models.load_model(cnn_model_path)
-svm_model = joblib.load(svm_model_path)
+try:
+    cnn_model = tf.keras.models.load_model(cnn_model_path)
+    svm_model = joblib.load(svm_model_path)
+except Exception as e:
+    st.error(f"Error loading models: {e}")
+    st.stop()
 
 def predict_with_cnn(image):
     image = cv2.resize(image, (128, 128))
