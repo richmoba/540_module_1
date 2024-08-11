@@ -6,17 +6,19 @@ from sklearn import svm
 import joblib
 import os
 from pathlib import Path
+import requests
+import tempfile
+
+def download_file(url, local_filename):
+    with requests.get(url, stream=True) as r:
+        r.raise_for_status()
+        with open(local_filename, 'wb') as f:
+            for chunk in r.iter_content(chunk_size=8192):
+                f.write(chunk)
+    return local_filename
 
 def get_model_dir():
-    model_dir = os.getenv('MAMMOGRAPHY_MODEL_DIR')
-    if model_dir:
-        return Path(model_dir)
-    
-    onedrive_path = Path(os.path.expanduser("~")) / "OneDrive" / "1. Baker-Richmond" / "1. Edu" / "1. RVB" / "1. Duke" / "0. 540" / "code" / "Module_1" / "models"
-    if onedrive_path.exists():
-        return onedrive_path
-    
-    return Path(__file__).parent / "models"
+    return Path(tempfile.mkdtemp())
 
 def train_cnn(X_train, y_train):
     model = Sequential([
@@ -46,8 +48,16 @@ def train_svm(X_train, y_train):
     print(f"SVM model saved successfully in {model_dir}")
 
 if __name__ == "__main__":
-    data_dir = Path(__file__).parent / "data" / "processed"
-    data = np.load(data_dir / 'processed_data.npz')
+    # OneDrive URL for processed data (replace with your actual URL)
+    processed_data_url = "https://1drv.ms/u/s!AhyCheI--Ucdn7E2GA0RBOZIEB4-eQ?e=ch74hd"
+    
+    # Create a temporary directory to store downloaded files
+    temp_dir = tempfile.mkdtemp()
+    
+    # Download and load the processed data
+    processed_data_path = os.path.join(temp_dir, 'processed_data.npz')
+    download_file(processed_data_url, processed_data_path)
+    data = np.load(processed_data_path, allow_pickle=True)
     X_train = data['X_train']
     y_train = data['y_train']
 

@@ -7,56 +7,40 @@ import joblib
 import os
 from pathlib import Path
 import requests
-import pickle  # Importing the pickle module
+import tempfile
 
-# Define the URL of the file
-onedrive_url = "https://1drv.ms/u/s!AhyCheI--Ucdn7E2GA0RBOZIEB4-eQ?e=ch74hd"
-local_filename = Path("processed_data.npz")
+# Function to download file from OneDrive
+def download_file(url, local_filename):
+    with requests.get(url, stream=True) as r:
+        r.raise_for_status()
+        with open(local_filename, 'wb') as f:
+            for chunk in r.iter_content(chunk_size=8192):
+                f.write(chunk)
+    return local_filename
 
-# Download the file from OneDrive
-response = requests.get(onedrive_url)
-with open(local_filename, 'wb') as f:
-    f.write(response.content)
+# OneDrive URLs (replace these with your actual OneDrive shared links)
+processed_data_url = "https://1drv.ms/u/s!AhyCheI--Ucdn7E2GA0RBOZIEB4-eQ?e=ch74hd"
+cnn_model_url = "YOUR_CNN_MODEL_ONEDRIVE_URL"
+svm_model_url = "YOUR_SVM_MODEL_ONEDRIVE_URL"
 
-# Try loading with numpy
-try:
-    data = np.load(local_filename, allow_pickle=True)
-except (pickle.UnpicklingError, ValueError) as e:
-    print(f"Error loading file with numpy: {e}")
-    # If numpy fails, try loading with joblib
-    try:
-        data = joblib.load(local_filename)
-    except Exception as e:
-        print(f"Error loading file with joblib: {e}")
-        data = None
+# Create a temporary directory to store downloaded files
+temp_dir = tempfile.mkdtemp()
 
-# Function to get the model directory
-def get_model_dir():
-    # Try to get the model directory from an environment variable
-    model_dir = os.getenv('MAMMOGRAPHY_MODEL_DIR')
-    if model_dir:
-        return Path(model_dir)
-    
-    # If not set, use the OneDrive path
-    onedrive_path = Path(os.path.expanduser("~")) / "OneDrive" / "1. Baker-Richmond" / "1. Edu" / "1. RVB" / "1. Duke" / "0. 540" / "code" / "Module_1" / "models"
-    if onedrive_path.exists():
-        return onedrive_path
-    
-    # If OneDrive path doesn't exist, use a default path relative to the script
-    return Path(__file__).parent / "models"
-
-# Get model and data directories
-model_dir = get_model_dir()
-data_dir = Path(__file__).parent / "data" / "processed"
-
-# Load data
-data = np.load(data_dir / 'processed_data.npz')
+# Download and load the processed data
+processed_data_path = os.path.join(temp_dir, 'processed_data.npz')
+download_file(processed_data_url, processed_data_path)
+data = np.load(processed_data_path, allow_pickle=True)
 X_test = data['X_test']
 y_test = data['y_test']
 
-# Load models
-cnn_model = tf.keras.models.load_model(model_dir / 'cnn_model.h5')
-svm_model = joblib.load(model_dir / 'svm_model.pkl')
+# Download and load the models
+cnn_model_path = os.path.join(temp_dir, 'cnn_model.h5')
+svm_model_path = os.path.join(temp_dir, 'svm_model.pkl')
+download_file(cnn_model_url, cnn_model_path)
+download_file(svm_model_url, svm_model_path)
+
+cnn_model = tf.keras.models.load_model(cnn_model_path)
+svm_model = joblib.load(svm_model_path)
 
 def predict_with_cnn(image):
     image = cv2.resize(image, (128, 128))
@@ -92,5 +76,4 @@ if uploaded_file is not None:
 
     st.write("\nNote: Class 0 typically represents 'No Cancer', while Classes 1 and 2 represent different types of cancer (e.g., calcification and mass).")
 
-st.write(f"\nUsing model directory: {model_dir}")
-st.write(f"Using data directory: {data_dir}")
+st.write(f"\nUsing temporary directory for models and data: {temp_dir}")

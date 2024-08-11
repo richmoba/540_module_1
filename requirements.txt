@@ -8,7 +8,7 @@ SimpleITK
 itk
 pandas
 gdcm
-streamlit
 numpy
 joblib
 requests
+pickle
