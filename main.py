@@ -7,7 +7,7 @@ import joblib
 import os
 from pathlib import Path
 import requests
-
+import pickle  # Importing the pickle module
 
 # Define the URL of the file
 onedrive_url = "https://1drv.ms/u/s!AhyCheI--Ucdn7E2GA0RBOZIEB4-eQ?e=ch74hd"
