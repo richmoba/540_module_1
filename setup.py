@@ -1,13 +1,17 @@
-import os
-import subprocess
-import sys
+#Richmond baker 540 module 1
+# setup.py
+
+
+import os   # Added to import os module
+import subprocess   # Added to import subprocess module
+import sys  # Added to import sys module
 
 # Function to install a package
-def install_package(package):
-    try:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", package])
-    except subprocess.CalledProcessError as e:
-        print(f"Failed to install {package}. Error: {e}")
+def install_package(package):   # Added to install a package
+    try:    # Added to try to install a package
+        subprocess.check_call([sys.executable, "-m", "pip", "install", package])    # Added to install a package
+    except subprocess.CalledProcessError as e:  # Added to handle exceptions
+        print(f"Failed to install {package}. Error: {e}")   # Added to print error message
         raise
 
 # List of required packages
@@ -15,10 +19,11 @@ required_packages = [
     "pydicom",
     "SimpleITK",
     "itk",
-    "pandas",    # Ensure pandas is installed
-    "numpy",     # Ensure numpy is installed
-    "opencv-python",  # Ensure OpenCV is installed
-    "scikit-learn"    # Ensure scikit-learn is installed
+    "pandas",
+    "numpy",
+    "opencv-python",
+    "scikit-learn",
+    "tensorflow"
 ]
 
 # Attempt to install required packages if not already installed
@@ -51,7 +56,7 @@ from scripts.make_dataset import preprocess_and_split_data
 
 if __name__ == "__main__":
     # Define the path to the metadata file and output directory
-    project_root = 'e:\\Project'  # Change this to your project root on the E: drive
+    project_root = 'D:\\540_module_1'  # Updated to D: drive
     metadata_file_path = os.path.join(project_root, 'data\\raw\\CBIS-DDSM\\metadata.csv')
     output_directory = os.path.join(project_root, 'data\\processed')
 

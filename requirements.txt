@@ -5,8 +5,8 @@ tensorflow
 keras
 streamlit
 pydicom
-gdmc
+SimpleITK
+itk
+pandas
+gdcm
 
-
-
-numpy opencv-python scikit-learn tensorflow keras streamlit pydicom

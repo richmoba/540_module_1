@@ -19,6 +19,7 @@ project/
 ├── models/
 ├── data/
 │ ├── raw/
+│ │  ├── CBIS-DDSM/
 │ ├── processed/
 │ ├── outputs/
 ├── notebooks/
@@ -26,6 +27,7 @@ project/
 
 
 ## Setup Instructions
+0. git clone https://github.com/richmoba/540_module_1.git 
 1. Manually download the CBIS-DDSM dataset from the CBIS-DDSM organization on TCIA.
 2. https://www.cancerimagingarchive.net/collection/cbis-ddsm/
 Note: ensure that the CBIS-DDSM folder is not read only.
@@ -41,6 +43,7 @@ data/raw/
 
 4. Install the required dependencies using `pip install -r requirements.txt`.
 5. Run the setup script: `python setup.py`.
+6. Run the model script: 'python  scripts\model.py
 6. Start the Streamlit interface: `streamlit run main.py`.
 
 ## Running the Project

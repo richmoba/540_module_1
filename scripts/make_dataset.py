@@ -1,194 +1,161 @@
 import os
-import shutil
 import pandas as pd
 import numpy as np
 import cv2
 from sklearn.model_selection import train_test_split
+import pydicom
+import SimpleITK as sitk
+import subprocess
 
-# Try to import the required DICOM libraries and set flags
-try:
-    import pydicom
-    pydicom_available = True
-except ImportError:
-    pydicom_available = False
-    print("pydicom is not available. Install it using `pip install pydicom`.")
-
-try:
-    import SimpleITK as sitk
-    simpleitk_available = True
-except ImportError:
-    simpleitk_available = False
-    print("SimpleITK is not available. Install it using `pip install SimpleITK`.")
-
-try:
-    import itk
-    itk_available = True
-except ImportError:
-    itk_available = False
-    print("ITK is not available. Install it using `pip install itk`.")
-
-# Handle the GDCM import separately since it often has issues on Windows
-try:
-    import gdcm
-    gdcm_available = True
-except ImportError as e:
-    gdcm_available = False
-    print(f"GDCM import failed: {e}. GDCM is not available.")
-
-# Function to read DICOM using pydicom
-def read_dicom_with_pydicom(file_path):
-    if not pydicom_available:
-        return None
-    try:
-        dicom = pydicom.dcmread(file_path)
-        image = dicom.pixel_array
-        return image
-    except Exception as e:
-        print(f"Error reading DICOM file {file_path} with pydicom: {e}")
-        return None
-
-# Function to read DICOM using SimpleITK
-def read_dicom_with_simpleitk(file_path):
-    if not simpleitk_available:
-        return None
-    try:
-        image = sitk.ReadImage(file_path)
-        image_array = sitk.GetArrayFromImage(image)
-        return image_array
-    except Exception as e:
-        print(f"Error reading DICOM file {file_path} with SimpleITK: {e}")
-        return None
-
-# Function to read DICOM using GDCM
-def read_dicom_with_gdcm(file_path):
-    if not gdcm_available:
-        return None
-    
-    try:
-        reader = gdcm.ImageReader()
-        reader.SetFileName(file_path)
-        if not reader.Read():
-            raise ValueError("Failed to read DICOM file")
-        
-        image = reader.GetImage()
-        image_array = image.GetBufferAsUint8()
-        return np.frombuffer(image_array, dtype=np.uint8).reshape(image.GetDimension(0), image.GetDimension(1))
-    except Exception as e:
-        print(f"Error reading DICOM file {file_path} with GDCM: {e}")
-        return None
-
-# Function to read DICOM using ITK
-def read_dicom_with_itk(file_path):
-    if not itk_available:
-        return None
-    try:
-        image = itk.imread(file_path)
-        array = itk.GetArrayFromImage(image)
-        return array
-    except Exception as e:
-        print(f"Error reading DICOM file {file_path} with ITK: {e}")
-        return None
-
-# Function to try multiple DICOM readers in sequence
-def read_dicom_file(file_path):
-    readers = [
-        read_dicom_with_pydicom,
-        read_dicom_with_simpleitk,
-        read_dicom_with_gdcm if gdcm_available else lambda x: None,  # Skip GDCM if not available
-        read_dicom_with_itk
-    ]
-    
-    for reader in readers:
-        image = reader(file_path)
-        if image is not None:
-            return image
-    print(f"Failed to read DICOM file {file_path} with all available readers.")
+def find_dcm_file(directory):
+    for root, dirs, files in os.walk(directory):
+        for file in files:
+            if file.lower().endswith('.dcm'):
+                return os.path.join(root, file)
     return None
 
-# Function to process the DICOM files and prepare the dataset
-def copy_files_and_load_images(metadata_file, temp_dir):
+def check_file_access(file_path):
+    try:
+        if not os.path.exists(file_path):
+            return f"File does not exist: {file_path}"
+        
+        if not os.path.isfile(file_path):
+            return f"Path is not a file: {file_path}"
+        
+        if not os.access(file_path, os.R_OK):
+            return f"File is not readable: {file_path}"
+        
+        try:
+            with open(file_path, 'rb') as f:
+                f.read(1)
+            return "File is accessible and readable"
+        except IOError as e:
+            return f"IOError when trying to read file: {e}"
+    except Exception as e:
+        return f"Error checking file access: {str(e)}"
+
+def run_icacls(file_path):
+    try:
+        result = subprocess.run(['icacls', file_path], capture_output=True, text=True)
+        return result.stdout
+    except Exception as e:
+        return f"Error running icacls: {str(e)}"
+
+def read_dicom_file(file_path):
+    try:
+        dicom = pydicom.dcmread(file_path)
+        return dicom.pixel_array
+    except Exception as e:
+        print(f"Error reading with pydicom: {e}")
+        try:
+            image = sitk.ReadImage(file_path)
+            return sitk.GetArrayFromImage(image)
+        except Exception as e:
+            print(f"Error reading with SimpleITK: {e}")
+            return None
+
+def copy_files_and_load_images(metadata_file, output_dir):
     images = []
     labels = []
+    errors = []
+    processed_files = 0
+    skipped_files = 0
 
-    # Load the CSV metadata file
-    metadata_df = pd.read_csv(metadata_file)
-
-    # Filter for rows with 'ROI mask images' if needed
-    roi_mask_df = metadata_df[metadata_df['Series Description'].str.contains('ROI mask images', na=False)]
+    metadata_df = pd.read_csv(metadata_file, sep=',')
+    roi_mask_df = metadata_df[metadata_df['Series Description'] == 'ROI mask images']
 
     for index, row in roi_mask_df.iterrows():
         file_path = row['File Location']
         
-        # Debugging information
+        print(f"Processing file {index + 1} of {len(roi_mask_df)}")
         print(f"Original file location from metadata: {file_path}")
 
-        # Normalize the path by removing any redundant components
-        if file_path.startswith('.'):
-            file_path = file_path[2:]  # Remove the leading './'
-
-        # Ensure 'CBIS-DDSM' is included only once in the final path
-        file_path = file_path.lstrip("\\/")  # Strip leading slashes
-        if file_path.startswith('CBIS-DDSM'):
-            file_path = file_path[len('CBIS-DDSM'):]  # Remove leading 'CBIS-DDSM' if present
-        file_path = file_path.lstrip("\\/")  # Strip any leading slashes again
-
-        # Construct the full path considering the project root directory
-        base_path = os.path.dirname(metadata_file)  # Get the directory of the metadata file
-        full_file_path = os.path.join(base_path, 'CBIS-DDSM', file_path)
-
-        # Normalize the path to remove any redundant segments
-        full_file_path = os.path.normpath(full_file_path)
+        base_path = os.path.dirname(metadata_file)
+        full_dir_path = os.path.normpath(os.path.join(base_path, file_path))
         
-        print(f"Resolved file path: {full_file_path}")
+        dcm_file_path = find_dcm_file(full_dir_path)
         
-        if os.path.exists(full_file_path):
+        if dcm_file_path is None:
+            error_msg = f"No DCM file found in directory: {full_dir_path}"
+            print(error_msg)
+            errors.append(error_msg)
+            skipped_files += 1
+            continue
+
+        print(f"Found DCM file: {dcm_file_path}")
+        
+        access_status = check_file_access(dcm_file_path)
+        print(f"File access status: {access_status}")
+        
+        icacls_output = run_icacls(dcm_file_path)
+        print(f"ICACLS output:\n{icacls_output}")
+        
+        if "File is accessible and readable" in access_status:
             try:
-                # Copy the file to a temporary location
-                temp_file_path = os.path.join(temp_dir, os.path.basename(full_file_path))
-                shutil.copy2(full_file_path, temp_file_path)  # Use copy2 to preserve metadata
+                image = read_dicom_file(dcm_file_path)
                 
-                # Attempt to read the file from the temporary location
-                image = read_dicom_file(temp_file_path)
                 if image is not None:
-                    # Resize image to a standard size (optional)
-                    image = cv2.resize(image, (128, 128))  # Example size, adjust as needed
+                    image = cv2.resize(image, (128, 128))
                     images.append(image)
 
-                    # Infer label based on some logic or column in metadata
-                    if 'benign' in file_path.lower():
-                        labels.append('benign')
-                    elif 'malignant' in file_path.lower():
-                        labels.append('malignant')
+                    if 'Calc-Test' in dcm_file_path or 'Calc-Training' in dcm_file_path:
+                        labels.append('calcification')
+                    elif 'Mass-Test' in dcm_file_path or 'Mass-Training' in dcm_file_path:
+                        labels.append('mass')
                     else:
-                        labels.append('normal')  # Adjust this as per your dataset
+                        labels.append('normal')
 
+                    processed_files += 1
+                else:
+                    error_msg = f"Failed to read DICOM file: {dcm_file_path}"
+                    print(error_msg)
+                    errors.append(error_msg)
+                    skipped_files += 1
             except Exception as e:
-                print(f"Error processing file {full_file_path} after copying to {temp_file_path}: {e}")
+                error_msg = f"Error processing file {dcm_file_path}. Error: {str(e)}"
+                print(error_msg)
+                errors.append(error_msg)
+                skipped_files += 1
         else:
-            print(f"File not found: {full_file_path}")
+            error_msg = f"File access issue: {dcm_file_path}. Status: {access_status}"
+            print(error_msg)
+            errors.append(error_msg)
+            skipped_files += 1
 
+    print(f"Processed files: {processed_files}")
+    print(f"Skipped files: {skipped_files}")
     print(f"Loaded {len(images)} images with {len(labels)} labels.")
+    print(f"Encountered {len(errors)} errors.")
+    
+    with open(os.path.join(output_dir, 'error_log.txt'), 'w') as f:
+        for error in errors:
+            f.write(f"{error}\n")
+    
     return np.array(images), np.array(labels)
 
-# Function to preprocess and split the dataset
 def preprocess_and_split_data(metadata_file, output_dir):
-    temp_dir = os.path.join(output_dir, 'temp')
-    os.makedirs(temp_dir, exist_ok=True)
+    os.makedirs(output_dir, exist_ok=True)
     
-    images, labels = copy_files_and_load_images(metadata_file, temp_dir)
+    images, labels = copy_files_and_load_images(metadata_file, output_dir)
     if len(images) == 0 or len(labels) == 0:
         raise ValueError("No images or labels found. Please check the metadata file and ensure paths are correct.")
     
-    # Normalize images (optional)
-    images = images / 255.0  # Scale pixel values to [0, 1]
+    images = images / 255.0
     
-    # Convert labels to numerical values if they are categorical
-    label_map = {'normal': 0, 'benign': 1, 'malignant': 2}  # Example mapping
+    label_map = {'normal': 0, 'calcification': 1, 'mass': 2}
     labels = np.array([label_map[label] for label in labels])
     
     X_train, X_test, y_train, y_test = train_test_split(images, labels, test_size=0.2, random_state=42)
     np.savez(os.path.join(output_dir, 'processed_data.npz'), X_train=X_train, X_test=X_test, y_train=y_train, y_test=y_test)
     
-    # Cleanup temporary directory
-    shutil.rmtree(temp_dir)
     print("Preprocessing and splitting completed successfully.")
+
+if __name__ == "__main__":
+    project_root = 'D:\\540_module_1'
+    metadata_file_path = os.path.join(project_root, 'data\\raw\\CBIS-DDSM\\metadata.csv')
+    output_directory = os.path.join(project_root, 'data\\processed')
+
+    print(f"Metadata file path: {metadata_file_path}")
+    print(f"Output directory: {output_directory}")
+
+    preprocess_and_split_data(metadata_file_path, output_directory)
