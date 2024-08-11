@@ -12,4 +12,3 @@ streamlit
 numpy
 joblib
 requests
-pickle
