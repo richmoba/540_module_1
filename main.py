@@ -8,15 +8,24 @@ import os
 from pathlib import Path
 import requests
 import tempfile
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
 
 # Function to download file from OneDrive
 def download_file(url, local_filename):
-    with requests.get(url, stream=True) as r:
-        r.raise_for_status()
-        with open(local_filename, 'wb') as f:
-            for chunk in r.iter_content(chunk_size=8192):
-                f.write(chunk)
-    return local_filename
+    try:
+        with requests.get(url, stream=True) as r:
+            r.raise_for_status()
+            with open(local_filename, 'wb') as f:
+                for chunk in r.iter_content(chunk_size=8192):
+                    f.write(chunk)
+        logging.info(f"Successfully downloaded file to {local_filename}")
+        return local_filename
+    except Exception as e:
+        logging.error(f"Error downloading file: {e}")
+        return None
 
 # OneDrive URLs (replace these with your actual OneDrive shared links)
 processed_data_url = "https://1drv.ms/u/s!AhyCheI--Ucdn7E2GA0RBOZIEB4-eQ?e=ch74hd"
@@ -25,30 +34,49 @@ svm_model_url = "YOUR_SVM_MODEL_ONEDRIVE_URL"
 
 # Create a temporary directory to store downloaded files
 temp_dir = tempfile.mkdtemp()
+logging.info(f"Created temporary directory: {temp_dir}")
 
 # Download and load the processed data
 processed_data_path = os.path.join(temp_dir, 'processed_data.npz')
-download_file(processed_data_url, processed_data_path)
-
-try:
-    data = np.load(processed_data_path, allow_pickle=True)
-    X_test = data['X_test']
-    y_test = data['y_test']
-except Exception as e:
-    st.error(f"Error loading processed data: {e}")
+if download_file(processed_data_url, processed_data_path):
+    logging.info(f"Attempting to load data from {processed_data_path}")
+    try:
+        # Try loading with numpy
+        data = np.load(processed_data_path, allow_pickle=True)
+        X_test = data['X_test']
+        y_test = data['y_test']
+        logging.info("Successfully loaded data with numpy")
+    except Exception as np_error:
+        logging.error(f"Error loading with numpy: {np_error}")
+        try:
+            # If numpy fails, try loading with joblib
+            data = joblib.load(processed_data_path)
+            X_test = data['X_test']
+            y_test = data['y_test']
+            logging.info("Successfully loaded data with joblib")
+        except Exception as joblib_error:
+            logging.error(f"Error loading with joblib: {joblib_error}")
+            st.error("Failed to load the processed data. Please check the file format and try again.")
+            st.stop()
+else:
+    st.error("Failed to download the processed data. Please check the URL and try again.")
     st.stop()
 
 # Download and load the models
 cnn_model_path = os.path.join(temp_dir, 'cnn_model.h5')
 svm_model_path = os.path.join(temp_dir, 'svm_model.pkl')
-download_file(cnn_model_url, cnn_model_path)
-download_file(svm_model_url, svm_model_path)
 
-try:
-    cnn_model = tf.keras.models.load_model(cnn_model_path)
-    svm_model = joblib.load(svm_model_path)
-except Exception as e:
-    st.error(f"Error loading models: {e}")
+if download_file(cnn_model_url, cnn_model_path) and download_file(svm_model_url, svm_model_path):
+    try:
+        cnn_model = tf.keras.models.load_model(cnn_model_path)
+        svm_model = joblib.load(svm_model_path)
+        logging.info("Successfully loaded both models")
+    except Exception as e:
+        logging.error(f"Error loading models: {e}")
+        st.error(f"Error loading models: {e}")
+        st.stop()
+else:
+    st.error("Failed to download the model files. Please check the URLs and try again.")
     st.stop()
 
 def predict_with_cnn(image):
@@ -86,3 +114,7 @@ if uploaded_file is not None:
     st.write("\nNote: Class 0 typically represents 'No Cancer', while Classes 1 and 2 represent different types of cancer (e.g., calcification and mass).")
 
 st.write(f"\nUsing temporary directory for models and data: {temp_dir}")
+
+# Display logs in Streamlit
+with st.expander("View Logs"):
+    st.text(logging.getLogger().handlers[0].stream.getvalue())
