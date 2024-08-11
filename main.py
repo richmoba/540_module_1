@@ -19,7 +19,8 @@ with open(local_filename, 'wb') as f:
     f.write(response.content)
 
 # Load the data using numpy
-data = np.load(local_filename)
+data = np.load(local_filename, allow_pickle=True)
+
 # Function to get the model directory
 def get_model_dir():
     # Try to get the model directory from an environment variable
