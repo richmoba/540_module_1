@@ -6,7 +6,20 @@ from sklearn import svm
 import joblib
 import os
 from pathlib import Path
+import requests
 
+
+# Define the URL of the file
+onedrive_url = "https://1drv.ms/u/s!AhyCheI--Ucdn7E2GA0RBOZIEB4-eQ?e=ch74hd"
+local_filename = Path("processed_data.npz")
+
+# Download the file from OneDrive
+response = requests.get(onedrive_url)
+with open(local_filename, 'wb') as f:
+    f.write(response.content)
+
+# Load the data using numpy
+data = np.load(local_filename)
 # Function to get the model directory
 def get_model_dir():
     # Try to get the model directory from an environment variable
