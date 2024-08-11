@@ -18,8 +18,17 @@ response = requests.get(onedrive_url)
 with open(local_filename, 'wb') as f:
     f.write(response.content)
 
-# Load the data using numpy
-data = np.load(local_filename, allow_pickle=True)
+# Try loading with numpy
+try:
+    data = np.load(local_filename, allow_pickle=True)
+except (pickle.UnpicklingError, ValueError) as e:
+    print(f"Error loading file with numpy: {e}")
+    # If numpy fails, try loading with joblib
+    try:
+        data = joblib.load(local_filename)
+    except Exception as e:
+        print(f"Error loading file with joblib: {e}")
+        data = None
 
 # Function to get the model directory
 def get_model_dir():
