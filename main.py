@@ -10,14 +10,29 @@ import requests
 import tempfile
 import logging
 import io
+import binascii
+import re
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 
-# Function to download file from OneDrive
+def get_onedrive_direct_link(share_link):
+    response = requests.get(share_link)
+    if response.status_code == 200:
+        url_pattern = r'https://api\.onedrive\.com/v1\.0/drives/[^/]+/items/[^/]+/content\?[^"']+'
+        matches = re.findall(url_pattern, response.text)
+        if matches:
+            return matches[0]
+    logging.error(f"Failed to extract direct download link from {share_link}")
+    return None
+
 def download_file(url, local_filename):
+    direct_link = get_onedrive_direct_link(url)
+    if not direct_link:
+        return None
+    
     try:
-        with requests.get(url, stream=True) as r:
+        with requests.get(direct_link, stream=True) as r:
             r.raise_for_status()
             with open(local_filename, 'wb') as f:
                 for chunk in r.iter_content(chunk_size=8192):
@@ -28,15 +43,20 @@ def download_file(url, local_filename):
         logging.error(f"Error downloading file: {e}")
         return None
 
-# Function to read raw file content
 def read_raw_file(file_path):
     with open(file_path, 'rb') as f:
         return f.read()
 
-# OneDrive URLs (replace these with your actual OneDrive shared links)
-processed_data_url = "https://1drv.ms/u/s!AhyCheI--Ucdn7E2GA0RBOZIEB4-eQ?e=ch74hd"
-cnn_model_url = "YOUR_CNN_MODEL_ONEDRIVE_URL"
-svm_model_url = "YOUR_SVM_MODEL_ONEDRIVE_URL"
+def analyze_file_content(file_path):
+    with open(file_path, 'rb') as f:
+        header = f.read(50)  # Read first 50 bytes
+    logging.info(f"File header (hex): {binascii.hexlify(header)}")
+    logging.info(f"File header (ascii): {header}")
+
+# OneDrive URLs
+processed_data_url = "https://1drv.ms/u/s!AhyCheI--UcdockUZBRc-y6WbHxT2w?e=k8U92o"
+cnn_model_url = "https://1drv.ms/u/s!AhyCheI--UcdockPIJ8xmo4Roxl3kQ?e=VIu6VA"
+svm_model_url = "https://1drv.ms/u/s!AhyCheI--UcdockOlr0sz87X6Y9-rw?e=Ru0Iq6"
 
 # Create a temporary directory to store downloaded files
 temp_dir = tempfile.mkdtemp()
@@ -46,36 +66,25 @@ logging.info(f"Created temporary directory: {temp_dir}")
 processed_data_path = os.path.join(temp_dir, 'processed_data.npz')
 if download_file(processed_data_url, processed_data_path):
     logging.info(f"Attempting to load data from {processed_data_path}")
+    analyze_file_content(processed_data_path)
     try:
-        # Try reading the file as raw bytes
-        raw_data = read_raw_file(processed_data_path)
-        logging.info(f"Raw file size: {len(raw_data)} bytes")
-        
-        # Try to interpret the raw data
+        # Attempt to load as numpy array
+        data = np.load(processed_data_path, allow_pickle=True)
+        X_test = data['X_test']
+        y_test = data['y_test']
+        logging.info("Successfully loaded data with numpy")
+    except Exception as np_error:
+        logging.error(f"Error loading with numpy: {np_error}")
         try:
-            # Attempt to load as numpy array
-            with io.BytesIO(raw_data) as f:
-                data = np.load(f, allow_pickle=True)
+            # If numpy fails, try loading with joblib
+            data = joblib.load(processed_data_path)
             X_test = data['X_test']
             y_test = data['y_test']
-            logging.info("Successfully loaded data with numpy")
-        except Exception as np_error:
-            logging.error(f"Error loading with numpy: {np_error}")
-            try:
-                # If numpy fails, try loading with joblib
-                with io.BytesIO(raw_data) as f:
-                    data = joblib.load(f)
-                X_test = data['X_test']
-                y_test = data['y_test']
-                logging.info("Successfully loaded data with joblib")
-            except Exception as joblib_error:
-                logging.error(f"Error loading with joblib: {joblib_error}")
-                st.error("Failed to load the processed data. Please check the file format and try again.")
-                st.stop()
-    except Exception as e:
-        logging.error(f"Error reading raw file: {e}")
-        st.error("Failed to read the processed data file. Please check the file and try again.")
-        st.stop()
+            logging.info("Successfully loaded data with joblib")
+        except Exception as joblib_error:
+            logging.error(f"Error loading with joblib: {joblib_error}")
+            st.error("Failed to load the processed data. Please check the file format and try again.")
+            st.stop()
 else:
     st.error("Failed to download the processed data. Please check the URL and try again.")
     st.stop()
