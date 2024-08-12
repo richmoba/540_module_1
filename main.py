@@ -9,6 +9,7 @@ from pathlib import Path
 import requests
 import tempfile
 import logging
+import io
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -27,6 +28,11 @@ def download_file(url, local_filename):
         logging.error(f"Error downloading file: {e}")
         return None
 
+# Function to read raw file content
+def read_raw_file(file_path):
+    with open(file_path, 'rb') as f:
+        return f.read()
+
 # OneDrive URLs (replace these with your actual OneDrive shared links)
 processed_data_url = "https://1drv.ms/u/s!AhyCheI--Ucdn7E2GA0RBOZIEB4-eQ?e=ch74hd"
 cnn_model_url = "YOUR_CNN_MODEL_ONEDRIVE_URL"
@@ -41,23 +47,35 @@ processed_data_path = os.path.join(temp_dir, 'processed_data.npz')
 if download_file(processed_data_url, processed_data_path):
     logging.info(f"Attempting to load data from {processed_data_path}")
     try:
-        # Try loading with numpy
-        data = np.load(processed_data_path, allow_pickle=True)
-        X_test = data['X_test']
-        y_test = data['y_test']
-        logging.info("Successfully loaded data with numpy")
-    except Exception as np_error:
-        logging.error(f"Error loading with numpy: {np_error}")
+        # Try reading the file as raw bytes
+        raw_data = read_raw_file(processed_data_path)
+        logging.info(f"Raw file size: {len(raw_data)} bytes")
+        
+        # Try to interpret the raw data
         try:
-            # If numpy fails, try loading with joblib
-            data = joblib.load(processed_data_path)
+            # Attempt to load as numpy array
+            with io.BytesIO(raw_data) as f:
+                data = np.load(f, allow_pickle=True)
             X_test = data['X_test']
             y_test = data['y_test']
-            logging.info("Successfully loaded data with joblib")
-        except Exception as joblib_error:
-            logging.error(f"Error loading with joblib: {joblib_error}")
-            st.error("Failed to load the processed data. Please check the file format and try again.")
-            st.stop()
+            logging.info("Successfully loaded data with numpy")
+        except Exception as np_error:
+            logging.error(f"Error loading with numpy: {np_error}")
+            try:
+                # If numpy fails, try loading with joblib
+                with io.BytesIO(raw_data) as f:
+                    data = joblib.load(f)
+                X_test = data['X_test']
+                y_test = data['y_test']
+                logging.info("Successfully loaded data with joblib")
+            except Exception as joblib_error:
+                logging.error(f"Error loading with joblib: {joblib_error}")
+                st.error("Failed to load the processed data. Please check the file format and try again.")
+                st.stop()
+    except Exception as e:
+        logging.error(f"Error reading raw file: {e}")
+        st.error("Failed to read the processed data file. Please check the file and try again.")
+        st.stop()
 else:
     st.error("Failed to download the processed data. Please check the URL and try again.")
     st.stop()
