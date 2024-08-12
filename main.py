@@ -19,7 +19,7 @@ logging.basicConfig(level=logging.INFO)
 def get_onedrive_direct_link(share_link):
     response = requests.get(share_link)
     if response.status_code == 200:
-        url_pattern = r'https://api\.onedrive\.com/v1\.0/drives/[^/]+/items/[^/]+/content\?[^"']+'
+        url_pattern = r'https:\/\/api\.onedrive\.com\/v1\.0\/drives\/[^\/]+\/items\/[^\/]+\/content\?.*?(?=")'
         matches = re.findall(url_pattern, response.text)
         if matches:
             return matches[0]
@@ -29,6 +29,7 @@ def get_onedrive_direct_link(share_link):
 def download_file(url, local_filename):
     direct_link = get_onedrive_direct_link(url)
     if not direct_link:
+        logging.error(f"Failed to get direct link for {url}")
         return None
     
     try:
